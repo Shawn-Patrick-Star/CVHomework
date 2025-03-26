@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
@@ -15,130 +16,76 @@ from sklearn.metrics import (
 )
 from scipy.spatial.distance import directed_hausdorff  # 用于计算HD
 from medpy.metric.binary import dc  # 用于计算Dice系数
+from metric import calculate_metrics, total_metrics
+
+epoch = 10
+batch_size = 8
+learning_rate = 1e-3
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+train_dataset = VOCDataset(root="./data", split="train")
+test_dataset = VOCDataset(root="./data", split="val")
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+# 模型训练
+model = SimpleSegmentationModel(num_classes=21)
+loss_func = nn.CrossEntropyLoss().to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 
+def train(model, train_loader, loss_func, optimizer):
+    model.train()     # 对于特定的层会有作用，如果没有不写也行
+    total_train_loss = 0
+    for img, label in train_loader:
+        img, label = img.to(device), label.to(device)
+
+        output = model(img)
+        loss = loss_func(output, label)
+
+        # 优化器优化模型
+        optimizer.zero_grad()       # 梯度清零
+        loss.backward()             # 反向传播求解梯度
+        optimizer.step()            # 更新权重参数
+        
+        total_train_loss += loss.item()
+    
+    return total_train_loss
 
 
-
-# 请不要使用torchvision的VOCSegmentation，独立实现dataset以及dataloader
-def get_dataloader(batch_size=8):
-    # 注意这里只有train的dataset，在测试时候请实现test的dataset
-    transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor()
-    ])
-    # 独立实现dataset的构建
-    dataset = VOCDataset(root="./data", transform=transform)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    return dataloader
-
-
-def train_model(model, dataloader, criterion, optimizer, num_epochs=10, lr=1e-3):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    for epoch in range(num_epochs):
-        # 补全训练代码，需要计算loss
-        for images, masks in dataloader:
-            pass
-    return model
 
 def visualize_results(model, dataloader):
     model.eval()
     # 这里应该补全可视化代码，并且输出<原图，预测图，真实标签图>
-    # with torch.no_grad():
-        # pass
+    images, masks = next(iter(dataloader))
+    with torch.no_grad():
+        preds = model(images.to(device)).argmax(1).cpu()
+    
+    fig, ax = plt.subplots(num_samples, 3, figsize=(10, 10))
+    for i in range(num_samples):
+        ax[i,0].imshow(images[i].permute(1,2,0))
+        ax[i,1].imshow(preds[i])
+        ax[i,2].imshow(masks[i])
+    plt.show()
 
-def calculate_metrics(pred, target, num_classes=21):
-    """
-    计算多个分割评估指标 mIoU, Dice, HD, Accuracy, Recall, F1
-    """
-    metrics = {}
-    
-    # 将输入转换为numpy数组
-    pred = pred.view(-1).cpu().numpy()
-    target = target.view(-1).cpu().numpy()
-    
-    # 计算mIoU
-    def mIoU():
-        return jaccard_score(target, pred, average='macro', 
-                           labels=range(num_classes), 
-                           zero_division=0)
-    
-    # 计算Dice系数
-    def dice_score():
-        return f1_score(target, pred, average='macro',  # Dice系数等价于F1 score
-                       labels=range(num_classes),
-                       zero_division=0)
-    
-    # 计算Hausdorff距离
-    def hausdorff_distance():
-        scores = []
-        pred_2d = pred.reshape(224, 224)
-        target_2d = target.reshape(224, 224)
-        for i in range(num_classes):
-            pred_mask = (pred_2d == i)
-            target_mask = (target_2d == i)
-            if not np.any(pred_mask) or not np.any(target_mask):
-                scores.append(0)
-                continue
-            pred_points = np.array(np.where(pred_mask)).T
-            target_points = np.array(np.where(target_mask)).T
-            scores.append(max(directed_hausdorff(pred_points, target_points)[0],
-                            directed_hausdorff(target_points, pred_points)[0]))
-        return np.mean(scores)
 
-    # 计算Accuracy
-    def accuracy():
-        return accuracy_score(target, pred)
 
-    # 计算Recall
-    def recall():
-        return recall_score(target, pred, average='macro',
-                          labels=range(num_classes),
-                          zero_division=0)
 
-    # 计算F1 score
-    def f1():
-        return f1_score(target, pred, average='macro',
-                       labels=range(num_classes),
-                       zero_division=0)
-    
-    # 计算所有指标
-    metrics['mIoU'] = mIoU()
-    metrics['Dice'] = dice_score()
-    metrics['HD'] = hausdorff_distance()
-    metrics['Accuracy'] = accuracy()
-    metrics['Recall'] = recall()
-    metrics['F1'] = f1()
-    
-    return metrics
-
-def test_model(model, dataloader):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def test(model, test_loader, ):
     model.eval()
-    
-    # 初始化所有指标的累加器
-    total_metrics = {
-        'mIoU': 0,
-        'Dice': 0,
-        'HD': 0,
-        'Accuracy': 0,
-        'Recall': 0,
-        'F1': 0
-    }
     num_batches = 0
     
     with torch.no_grad():
-        for images, masks in dataloader:
-            images = images.to(device)
-            masks = masks.to(device)
+        for img, label in test_loader:
+            img = img.to(device)
+            label = label.to(device)
             
-            outputs = model(images)
+            outputs = model(img)
             preds = outputs.argmax(dim=1)
             
-            batch_metrics = calculate_metrics(preds, masks)
+            batch_metrics = calculate_metrics(preds, label)
 
             for metric_name in total_metrics.keys():
                 total_metrics[metric_name] += batch_metrics[metric_name]
@@ -159,13 +106,32 @@ def test_model(model, dataloader):
     
     return avg_metrics
 
+def main():
+    print("===================Start===================")
+    print(f"TrainData_len:  \t{len(train_dataset)}")
+    print(f"TestData_len:   \t{len(test_dataset)}")
+    print(f"Device:         \t{device}")
+    print(f"Epoch:          \t{epoch}")
+    print(f"Batch_size:     \t{batch_size}")
+    print(f"Learning_rate:  \t{learning_rate}")
+    print(f"Model:          \t{model.__class__.__name__}")
+    print(f"Loss Function:  \t{loss_func.__class__.__name__}")
+    print(f"Optimizer:      \t{optimizer.__class__.__name__}")
+    print("===========================================")
+
+    
+
+    
+    # train_and_test(net, loss_func, optimizer)
+
 if __name__ == "__main__":
-    dataloader = get_dataloader()
-    model = SimpleSegmentationModel(num_classes=21)
+
     # 对下面进行调整，不一定需要adam，并分析不同lr对结果的影响
     # lr = 1e-3
     # criterion = nn.CrossEntropyLoss()
     # optimizer = optim.Adam(model.parameters(), lr=lr)
-    model = train_model(model, dataloader)
-    visualize_results(model, dataloader)
-    avg_metrics = test_model(model, dataloader)
+    # model = train_model(model, dataloader)
+    # visualize_results(model, dataloader)
+    # avg_metrics = test_model(model, dataloader)
+
+    main()
