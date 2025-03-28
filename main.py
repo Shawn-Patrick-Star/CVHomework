@@ -20,8 +20,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 train_dataset = VOCDataset(root="./data", split="train")
 test_dataset = VOCDataset(root="./data", split="val")
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=batch_size)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
 # 模型训练
 model = LightSegNet(num_classes=21).to(device)
@@ -61,10 +61,8 @@ def test(model, test_loader):
             preds = outputs.argmax(dim=1)
             loss = loss_func(outputs, labels)
             
-            print(preds.shape, labels.shape)
 
             for label, pred in zip(preds, labels): # 逐样本计算指标
-                print(label.shape, pred.shape)
                 calculate_metrics(pred, label)
             
             total_test_loss += loss.item()
@@ -115,6 +113,9 @@ def main():
     print(f"TrainData_len:  \t{len(train_dataset)}")
     print(f"TestData_len:   \t{len(test_dataset)}")
     print(f"Device:         \t{device}")
+    print(f"GPU_id:         \t{torch.cuda.current_device()}")
+    print(f"GPU_num:        \t{torch.cuda.device_count()}")
+
     print(f"Epoch:          \t{num_epoch}")
     print(f"Batch_size:     \t{batch_size}")
     print(f"Learning_rate:  \t{learning_rate}")
