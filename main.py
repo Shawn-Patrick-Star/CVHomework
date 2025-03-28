@@ -9,7 +9,7 @@ import time
 from dataSet import VOCDataset
 from model import LightSegNet
 from display import display
-from metric import calculate_metrics, total_metrics, init_metrics
+from metric import calculate_metrics, total_metrics
 
 num_epoch = 1
 batch_size = 16
@@ -72,27 +72,27 @@ def test(model, test_loader):
     
     # 计算平均值
     avg_metrics = {k: v / num_batches for k, v in total_metrics.items()}
-    return avg_metrics
+    return avg_metrics, total_test_loss
 
 def train_and_test(model, loss_func, optimizer):
     
     for epoch in range(1, num_epoch+1):
-        init_metrics()
+
         start_time = time.time()
         total_train_loss = train(model, train_loader, loss_func, optimizer)
         print(f"Epoch {epoch}/{num_epoch} \tTime: {time.time() - start_time} \tTrain Loss: {total_train_loss:.4f}")
 
-    visualize_results(model, train_loader)
+    # visualize_results(model, train_loader)
 
-    # avg_metrics = test(model, test_loader)
-    # # 打印所有指标
-    # print(f"\n---------Epoch {epoch}/{num_epoch} Avg_Metrics----------:")
-    # print(f"mIoU:               \t{avg_metrics['mIoU']:.4f}")
-    # print(f"Dice:               \t{avg_metrics['Dice']:.4f}")
-    # print(f"Hausdorff Distance: \t{avg_metrics['HD']:.4f}")
-    # print(f"Accuracy:           \t{avg_metrics['Accuracy']:.4f}")
-    # print(f"Recall:             \t{avg_metrics['Recall']:.4f}")
-    # print(f"F1 Score:           \t{avg_metrics['F1']:.4f}")
+    avg_metrics, total_test_loss = test(model, test_loader)
+    # 打印所有指标
+    print(f"\n--------- Avg_Metrics----------:")
+    print(f"mIoU:               \t{avg_metrics['mIoU']:.4f}")
+    print(f"Dice:               \t{avg_metrics['Dice']:.4f}")
+    print(f"Hausdorff Distance: \t{avg_metrics['HD']:.4f}")
+    print(f"Accuracy:           \t{avg_metrics['Accuracy']:.4f}")
+    print(f"Recall:             \t{avg_metrics['Recall']:.4f}")
+    print(f"F1 Score:           \t{avg_metrics['F1']:.4f}")
 
 def visualize_results(model, dataloader, num_samples=3):
     model.eval()

@@ -6,36 +6,6 @@ from PIL import Image
 from utils import PIL2Tensor
 
 
-
-def get_fileList(root, is_train=True): 
-    img_dir = os.path.join(root, "JPEGImages")
-    label_dir = os.path.join(root, "SegmentationClass")
-
-    # 根据split读取对应的文件名列表（示例需要实际文件列表）
-    split = "train" if is_train else "val"
-    split_file = os.path.join(root, "ImageSets/Segmentation", split + ".txt")
-    with open(split_file, 'r') as f:
-        file_names = [line.strip() for line in f.readlines()]
-    
-    image_files = [os.path.join(img_dir, f"{name}.jpg") for name in file_names]
-    label_files = [os.path.join(label_dir, f"{name}.png") for name in file_names]
-
-    return image_files, label_files
-
-def voc_rand_crop(image, label, height, width):
-    """
-    Random crop image (PIL image) and label (PIL image).
-    """
-    i, j, h, w = transforms.RandomCrop.get_params(
-        image, output_size=(height, width))
-
-    image = transforms.functional.crop(image, i, j, h, w)
-    label = transforms.functional.crop(label, i, j, h, w)
-
-    return image, label
-
-
-
 class VOCDataset(torch.utils.data.Dataset):
     def __init__(self, root, split, crop_size=(224, 224)):
         self.root = root
@@ -72,6 +42,34 @@ class VOCDataset(torch.utils.data.Dataset):
         label = PIL2Tensor(label)
 
         return img, label
+
+
+def get_fileList(root, is_train=True): 
+    img_dir = os.path.join(root, "JPEGImages")
+    label_dir = os.path.join(root, "SegmentationClass")
+
+    # 根据split读取对应的文件名列表（示例需要实际文件列表）
+    split = "train" if is_train else "val"
+    split_file = os.path.join(root, "ImageSets/Segmentation", split + ".txt")
+    with open(split_file, 'r') as f:
+        file_names = [line.strip() for line in f.readlines()]
+    
+    image_files = [os.path.join(img_dir, f"{name}.jpg") for name in file_names]
+    label_files = [os.path.join(label_dir, f"{name}.png") for name in file_names]
+
+    return image_files, label_files
+
+def voc_rand_crop(image, label, height, width):
+    """
+    Random crop image (PIL image) and label (PIL image).
+    """
+    i, j, h, w = transforms.RandomCrop.get_params(
+        image, output_size=(height, width))
+
+    image = transforms.functional.crop(image, i, j, h, w)
+    label = transforms.functional.crop(label, i, j, h, w)
+
+    return image, label
 
 
 if __name__ == "__main__":

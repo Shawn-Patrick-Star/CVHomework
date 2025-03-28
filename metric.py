@@ -8,6 +8,7 @@ from sklearn.metrics import (
 from scipy.spatial.distance import directed_hausdorff  # 用于计算HD
 from medpy.metric.binary import dc  # 用于计算Dice系数
 
+
 # 初始化所有指标的累加器
 total_metrics = {
     'mIoU':     0,      # mean Intersection over Union 平均交并比 
@@ -17,10 +18,6 @@ total_metrics = {
     'Recall':   0,      # 
     'F1':       0       # F1 score 
 }
-
-def init_metrics():
-    for key in total_metrics.keys():
-        total_metrics[key] = 0
 
 
 def calculate_metrics(label, pred, num_classes=21):
@@ -93,21 +90,35 @@ def calculate_metrics(label, pred, num_classes=21):
                        zero_division=0)
     
     # 计算所有指标
-    # total_metrics['mIoU'] += mIoU()
-    # total_metrics['Dice'] += dice_score()
-    total_metrics['HD'] += hausdorff_distance()
-    # total_metrics['Accuracy'] += accuracy()
-    # total_metrics['Recall'] += recall()
-    # total_metrics['F1'] += f1()
+    total_metrics['mIoU'] +=        mIoU()
+    total_metrics['Dice'] +=        dice_score()
+    total_metrics['HD'] +=          hausdorff_distance()
+    total_metrics['Accuracy'] +=    accuracy()
+    total_metrics['Recall'] +=      recall()
+    total_metrics['F1'] +=          f1()
     
 
 if __name__ == "__main__":
     import torch
-    # 模拟输入（假设为类别预测结果）
-    pred = torch.rand(224, 224)
-    label = torch.rand(224, 224)
-    print(pred.shape, label.shape)
-    # 计算Hausdorff距离
-    calculate_metrics(pred, label, num_classes=3)
-    print(f"Hausdorff Distance: {total_metrics}")
 
+    label = torch.zeros(224*224, dtype=torch.long)
+    pred = torch.zeros(224*224, dtype=torch.long)
+    calculate_metrics(label, pred)
+    print("测试用例1 - 相同标签和预测:")
+    print(f"HD: {total_metrics['HD']:.2f}")  # 预期输出0.00
+
+    # 测试用例2: 标签全0，预测中最后一个像素为1
+    pred = torch.zeros(224*224, dtype=torch.long)
+    pred[-1] = 1  # 修改最后一个像素
+    calculate_metrics(label, pred)
+    print("\n测试用例2 - 单个像素差异:")
+    print(f"HD: {total_metrics['HD']:.2f}")  # 预期非零值（例如约15.15）
+
+    # 测试用例3: 不同区域的类别（例如类别1在上下半部分）
+    label = torch.zeros(224*224, dtype=torch.long)
+    label[:112*224] = 1  # 上半部分为1
+    pred = torch.zeros(224*224, dtype=torch.long)
+    pred[112*224:] = 1    # 下半部分为1
+    calculate_metrics(label, pred, num_classes=2)
+    print("\n测试用例3 - 不同区域分布:")
+    print(f"HD: {total_metrics['HD']:.2f}")  # 预期较大的HD值
