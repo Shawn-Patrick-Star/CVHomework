@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from PIL import Image
 
 COLORMAP = {
     (0, 0, 0): 0,         # Background
@@ -24,28 +25,28 @@ COLORMAP = {
     (128, 192, 0): 19,    # Train
     (0, 64, 128): 20,     # TV/Monitor
 }
+colormap2label = np.zeros(256 ** 3, dtype=np.uint8)
+for i, colormap in enumerate(COLORMAP):
+    colormap2label[(colormap[0] * 256 + colormap[1]) * 256 + colormap[2]] = i
 
 
-def PIL2Tensor(label):
+
+
+def PIL2Tensor(label_pil):
     """
-    convert label (PIL image) to label (int64 tensor).
+    convert label (PIL image) to label (uint8 tensor).
     """
-    label = np.array(label)
-    x = np.zeros(label.shape[:2], dtype=np.int64)
-    for rgb, idx in COLORMAP.items():
-        x[(label == np.array(rgb)).all(axis=-1)] = idx
-        
-    return torch.from_numpy(x)
+    label_np = np.array(label_pil, dtype=np.int32)
+    idx = (label_np[:, :, 0] * 256 + label_np[:, :, 1]) * 256 + label_np[:, :, 2]
+    return torch.tensor(colormap2label[idx], dtype=torch.uint8)
     
 
-def Tensor2PIL(label):
-    """
-    convert label (int64 tensor) to label (PIL image).
-    """
-    label = label.numpy()
-    x = np.zeros((label.shape[0], label.shape[1], 3))
-    for rgb, idx in COLORMAP.items():
-        x[label == idx] = rgb
-
-    return x
+def denormalize(tensor):
+    # 反归一化处理
+    mean = torch.tensor([0.485, 0.456, 0.406])
+    std = torch.tensor([0.229, 0.224, 0.225])
+    tensor = tensor.clone()
+    tensor = tensor * std[:, None, None] + mean[:, None, None]
+    tensor = torch.clamp(tensor, 0, 1)
+    return tensor
 

@@ -7,7 +7,7 @@ from utils import PIL2Tensor
 
 
 class VOCDataset(torch.utils.data.Dataset):
-    def __init__(self, root, split, crop_size=(224, 224)):
+    def __init__(self, root, split, crop_size=(320, 480)):
         self.root = root
         self.split = split
         self.crop_size = crop_size
@@ -16,9 +16,7 @@ class VOCDataset(torch.utils.data.Dataset):
         self.image_files = self.filter(self.image_files)
         self.label_files = self.filter(self.label_files)
         
-        # 图像转换：Resize使用双线性插值
         self.image_transform = transforms.Compose([
-            transforms.Resize(crop_size),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
@@ -32,16 +30,15 @@ class VOCDataset(torch.utils.data.Dataset):
         return len(self.image_files)
 
     def __getitem__(self, idx):
-        img = Image.open(self.image_files[idx]).convert('RGB')
-        label = Image.open(self.label_files[idx]).convert('RGB')  # 确保读取的是索引图
-        # label = Image.open(self.label_files[idx]).convert('P')  # 确保读取的是索引图
+        img_pil = Image.open(self.image_files[idx]).convert('RGB')
+        label_pil = Image.open(self.label_files[idx]).convert('RGB')  # 读取标签图像
 
-        img, label = voc_rand_crop(img, label, *self.crop_size)
+        img_pil, label_pil = rand_crop(img_pil, label_pil, *self.crop_size)
 
-        img = self.image_transform(img)
-        label = PIL2Tensor(label)
+        img_tensor = self.image_transform(img_pil)
+        label_tensor = PIL2Tensor(label_pil)
 
-        return img, label
+        return img_tensor, label_tensor
 
 
 def get_fileList(root, is_train=True): 
@@ -59,7 +56,7 @@ def get_fileList(root, is_train=True):
 
     return image_files, label_files
 
-def voc_rand_crop(image, label, height, width):
+def rand_crop(image, label, height, width):
     """
     Random crop image (PIL image) and label (PIL image).
     """
@@ -73,22 +70,23 @@ def voc_rand_crop(image, label, height, width):
 
 
 if __name__ == "__main__":
-    # import matplotlib.pyplot as plt
-    # image_files, label_files = get_fileList("./data", is_train=True)
-
-    # img = Image.open(image_files[0]).convert('RGB')
-    # label = Image.open(label_files[0]).convert('RGB')
-
-    # img, label = voc_rand_crop(img, label, 224, 224)
-    # plt.subplot(121), plt.imshow(img)
-    # plt.subplot(122), plt.imshow(label)
-    # plt.show()
 
     from display import display
+    from torch.utils.data import DataLoader
 
     dataset = VOCDataset(root="./data", split="train")
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True)  
-    images, labels = next(iter(dataloader))
-    print("images.shape:", images.shape)
-    print("labels.shape:", labels.shape)
-    display(images, labels, labels, num_samples=3)
+    img, label = dataset[100]
+    # print(img.shape)
+    # print(img.dtype)
+    # print(img)
+    # print()
+    # print(label.shape)
+    # print(label.dtype)
+    # print(label)
+    
+
+    dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+    imgs, labels = next(iter(dataloader))
+    display(imgs, labels, labels, num_samples=3)
+     
+
