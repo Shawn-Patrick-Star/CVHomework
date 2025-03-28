@@ -6,8 +6,7 @@ from sklearn.metrics import (
     recall_score,   # 用于计算Recall
 )
 from scipy.spatial.distance import directed_hausdorff  # 用于计算HD
-
-
+from medpy.metric.binary import dc  # 用于计算Dice系数
 
 # 初始化所有指标的累加器
 total_metrics = {
@@ -19,26 +18,29 @@ total_metrics = {
     'F1':       0       # F1 score 
 }
 
+def init_metrics():
+    for key in total_metrics.keys():
+        total_metrics[key] = 0
 
-def calculate_metrics(pred, target, num_classes=21):
+
+def calculate_metrics(label, pred, num_classes=21):
     """
     计算多个分割评估指标 mIoU, Dice, HD, Accuracy, Recall, F1
     """
-    metrics = {}
     
     # 将输入转换为numpy数组
     pred = pred.view(-1).cpu().numpy()
-    target = target.view(-1).cpu().numpy()
+    label = label.view(-1).cpu().numpy()
     
     # 计算mIoU
     def mIoU():
-        return jaccard_score(target, pred, average='macro', 
+        return jaccard_score(label, pred, average='macro', 
                            labels=range(num_classes), 
                            zero_division=0)
     
     # 计算Dice系数
     def dice_score():
-        return f1_score(target, pred, average='macro',  # Dice系数等价于F1 score
+        return f1_score(label, pred, average='macro',  # Dice系数等价于F1 score
                        labels=range(num_classes),
                        zero_division=0)
     
@@ -46,41 +48,66 @@ def calculate_metrics(pred, target, num_classes=21):
     def hausdorff_distance():
         scores = []
         pred_2d = pred.reshape(224, 224)
-        target_2d = target.reshape(224, 224)
+        label_2d = label.reshape(224, 224)
+        max_distance = np.sqrt(pred_2d.shape[0]**2 + pred_2d.shape[1]**2)
+    
         for i in range(num_classes):
-            pred_mask = (pred_2d == i)
-            target_mask = (target_2d == i)
-            if not np.any(pred_mask) or not np.any(target_mask):
+            pred_mask = (pred == i)
+            label_mask = (label == i)
+            
+            # 处理两个掩码均为空的情况
+            if not np.any(pred_mask) and not np.any(label_mask):
                 scores.append(0)
                 continue
-            pred_points = np.array(np.where(pred_mask)).T
-            target_points = np.array(np.where(target_mask)).T
-            scores.append(max(directed_hausdorff(pred_points, target_points)[0],
-                            directed_hausdorff(target_points, pred_points)[0]))
+                
+            # 仅一方为空，返回最大距离
+            if not np.any(pred_mask) or not np.any(label_mask):
+                scores.append(max_distance)
+                continue
+                
+            # 提取坐标点
+            pred_points = np.stack(np.where(pred_mask), axis=1)
+            label_points = np.stack(np.where(label_mask), axis=1)
+            
+            # 计算双向Hausdorff距离
+            dh1 = directed_hausdorff(pred_points, label_points)[0]
+            dh2 = directed_hausdorff(label_points, pred_points)[0]
+            scores.append(max(dh1, dh2))
+            
         return np.mean(scores)
 
     # 计算Accuracy
     def accuracy():
-        return accuracy_score(target, pred)
+        return accuracy_score(label, pred)
 
     # 计算Recall
     def recall():
-        return recall_score(target, pred, average='macro',
+        return recall_score(label, pred, average='macro',
                           labels=range(num_classes),
                           zero_division=0)
 
     # 计算F1 score
     def f1():
-        return f1_score(target, pred, average='macro',
+        return f1_score(label, pred, average='macro',
                        labels=range(num_classes),
                        zero_division=0)
     
     # 计算所有指标
-    metrics['mIoU'] = mIoU()
-    metrics['Dice'] = dice_score()
-    metrics['HD'] = hausdorff_distance()
-    metrics['Accuracy'] = accuracy()
-    metrics['Recall'] = recall()
-    metrics['F1'] = f1()
+    # total_metrics['mIoU'] += mIoU()
+    # total_metrics['Dice'] += dice_score()
+    total_metrics['HD'] += hausdorff_distance()
+    # total_metrics['Accuracy'] += accuracy()
+    # total_metrics['Recall'] += recall()
+    # total_metrics['F1'] += f1()
     
-    return metrics
+
+if __name__ == "__main__":
+    import torch
+    # 模拟输入（假设为类别预测结果）
+    pred = torch.rand(224, 224)
+    label = torch.rand(224, 224)
+    print(pred.shape, label.shape)
+    # 计算Hausdorff距离
+    calculate_metrics(pred, label, num_classes=3)
+    print(f"Hausdorff Distance: {total_metrics}")
+
