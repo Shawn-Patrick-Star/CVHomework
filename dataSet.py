@@ -73,6 +73,7 @@ if __name__ == "__main__":
 
     from display import display
     from torch.utils.data import DataLoader
+    import numpy as np
 
     dataset = VOCDataset(root="./data", split="train")
     img, label = dataset[100]
@@ -83,9 +84,14 @@ if __name__ == "__main__":
     # print(label.shape)
     # print(label.dtype)
     # print(label)
+
+    # print(np.unique(label.numpy()))
     
 
     dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
     imgs, labels = next(iter(dataloader))
+    print(np.unique(labels[0].numpy()))
+    
+
     display(imgs, labels, labels, num_samples=3)
      

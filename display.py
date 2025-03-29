@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
-from utils import denormalize
+from utils import denormalize, Tensor2PIL
+import numpy as np
 
 '''
     imgs: tensor, shape: [batch_size, 3, H, W]
@@ -20,8 +21,8 @@ def display(imgs, preds, labels, num_samples=3):
         故使用 permute 
         '''
         ax[i,0].imshow(denormalize(imgs[i]).permute(1,2,0))
-        ax[i,1].imshow(preds[i])
-        ax[i,2].imshow(labels[i])
+        ax[i,1].imshow(Tensor2PIL(preds[i]))
+        ax[i,2].imshow(Tensor2PIL(labels[i]))
 
         ax[i,1].set_title("Predict")
         ax[i,0].set_title("Image")
@@ -29,17 +30,21 @@ def display(imgs, preds, labels, num_samples=3):
 
     plt.tight_layout()
     plt.show()
+    plt.savefig("result.png")
+
+
+
 
 
 if __name__ == "__main__":
     import torch
-    from model import LightSegNet
+    from model import FCNs, VGGNet
     from torch.utils.data import DataLoader
     from dataSet import VOCDataset
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # 加载模型
-    model = LightSegNet()  # 实例化模型结构
+    model = FCNs(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21)
     model.load_state_dict(torch.load("model.pth"))  # 加载参数
     model.to(device)
     
@@ -48,12 +53,16 @@ if __name__ == "__main__":
     dataset = VOCDataset(root="./data", split="val")
     dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
     images, masks = next(iter(dataloader))
+    
+
     images = images.to(device)
     masks = masks.to(device)
     with torch.no_grad():
         preds = model(images).argmax(1)
-    
-    print(images[0].shape, preds[0].shape, masks[0].shape)
+    images, preds, masks = images.cpu(), preds.cpu(), masks.cpu()
 
-    display(images.cpu(), preds.cpu(), masks.cpu(), num_samples=3)
+    print(np.unique(masks[0].numpy()))
+    print(np.unique(preds[0].numpy()))
+
+    display(images, preds, masks, num_samples=3)
 

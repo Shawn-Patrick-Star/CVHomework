@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision.models import VGG  # 导入新版权重枚举
+from torchvision.models import vgg16, VGG16_Weights, VGG  # 导入新版权重枚举
 from torchvision import models
 
 """Architecture选择：FCN32s; FCN16s; FCN8s; FCNs"""

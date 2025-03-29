@@ -34,12 +34,22 @@ for i, colormap in enumerate(COLORMAP):
 
 def PIL2Tensor(label_pil):
     """
-    convert label (PIL image) to label (uint8 tensor).
+    convert label (PIL image) to label (int64 tensor).
     """
     label_np = np.array(label_pil, dtype=np.int32)
     idx = (label_np[:, :, 0] * 256 + label_np[:, :, 1]) * 256 + label_np[:, :, 2]
     return torch.tensor(colormap2label[idx], dtype=torch.int64)
     
+def Tensor2PIL(label_tensor):
+    """
+    convert label (int64 tensor) to label (PIL image).
+    """
+    label_np = np.zeros((label_tensor.shape[0], label_tensor.shape[1], 3), dtype=np.uint8)
+    for i, colormap in enumerate(COLORMAP):
+        label_np[label_tensor == i] = colormap
+    return Image.fromarray(label_np, mode='RGB')
+
+
 
 def denormalize(tensor):
     # 反归一化处理
