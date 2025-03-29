@@ -38,7 +38,7 @@ def PIL2Tensor(label_pil):
     """
     label_np = np.array(label_pil, dtype=np.int32)
     idx = (label_np[:, :, 0] * 256 + label_np[:, :, 1]) * 256 + label_np[:, :, 2]
-    return torch.tensor(colormap2label[idx], dtype=torch.uint8)
+    return torch.tensor(colormap2label[idx], dtype=torch.int64)
     
 
 def denormalize(tensor):
