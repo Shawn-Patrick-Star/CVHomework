@@ -1,17 +1,14 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import numpy as np
+import torch.nn.functional as F
 import time
 import os
 from dataSet import VOCDataset
 from model import VGGNet, FCNs
-from display import display
+from display import visualize_results
 from metric import calculate_metrics, print_avg_metrics
-import torch.nn.functional as F
+
 
 # 如果在linux, 需要设置 device
 if os.name == 'posix':
@@ -20,6 +17,7 @@ num_epoch = 100
 batch_size = 16
 learning_rate = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 
 train_dataset = VOCDataset(root="./data", split="train")
@@ -77,38 +75,6 @@ def test(model, test_loader, loss_func):
 
     return total_test_loss
 
-def train_and_test(model, loss_func, optimizer):
-    print("Start Training...")
-    for epoch in range(1, num_epoch+1):
-
-        start_time = time.time()
-        total_train_loss = train(model, train_loader, loss_func, optimizer)
-        print(f"Epoch {epoch}/{num_epoch} \tTime: {time.time() - start_time:.4f} \tTrain Loss: {total_train_loss:.4f}")
-
-    # 保存模型
-    torch.save(model.state_dict(), f"model_{num_epoch}.pth")
-
-
-    print("Start Testing...")
-    total_test_loss = test(model, test_loader, loss_func)
-    # 打印所有指标
-    print_avg_metrics(len(test_dataset))
-    
-    visualize_results(model, train_loader)
-
-
-def visualize_results(model, dataloader, num_samples=3):
-    model.eval()
-    # 这里应该补全可视化代码，并且输出<原图，预测图，真实标签图>
-    images, masks = next(iter(dataloader))
-    images = images.to(device)
-    masks = masks.to(device)
-    with torch.no_grad():
-        preds = model(images).argmax(1)
-    
-    display(images.cpu(), preds.cpu(), masks.cpu(), num_samples)
-
-
 
 def main():
     print("===================Start===================")
@@ -126,8 +92,22 @@ def main():
     print(f"Optimizer:      \t{optimizer.__class__.__name__}")
     print("===========================================")
 
-    train_and_test(model, loss_func, optimizer)
-    # visualize_results(model, test_loader)
+    print("Start Training...")
+    for epoch in range(1, num_epoch+1):
+        start_time = time.time()
+        total_train_loss = train(model, train_loader, loss_func, optimizer)
+        print(f"Epoch {epoch}/{num_epoch} \tTime: {time.time() - start_time:.4f} \tTrain Loss: {total_train_loss:.4f}")
+
+    # 保存模型
+    torch.save(model.state_dict(), f"model_{num_epoch}.pth")
+
+    print("Start Testing...")
+    total_test_loss = test(model, test_loader, loss_func)
+    # 打印所有指标
+    print_avg_metrics(len(test_dataset))
+
+    visualize_results(model, train_loader)
+
 
 if __name__ == "__main__":
     main()

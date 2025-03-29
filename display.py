@@ -2,6 +2,19 @@ import matplotlib.pyplot as plt
 from utils import denormalize, Tensor2PIL
 import numpy as np
 
+
+def visualize_results(model, dataloader, num_samples=3):
+    model.eval()
+    # 这里应该补全可视化代码，并且输出<原图，预测图，真实标签图>
+    images, masks = next(iter(dataloader))
+    images = images.to(device)
+    masks = masks.to(device)
+    with torch.no_grad():
+        preds = model(images).argmax(1)
+    
+    display(images.cpu(), preds.cpu(), masks.cpu(), num_samples)
+
+
 '''
     imgs: tensor, shape: [batch_size, 3, H, W]
     preds: tensor, shape: [batch_size, H, W]
