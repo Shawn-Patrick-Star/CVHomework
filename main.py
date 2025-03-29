@@ -6,12 +6,16 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import os
 from dataSet import VOCDataset
-from model import LightSegNet
+from model import VGGNet, FCNs
 from display import display
-from metric import calculate_metrics, total_metrics
+from metric import calculate_metrics, print_avg_metrics
 
-num_epoch = 1
+# 如果在linux, 需要设置 device
+if os.name == 'posix':
+    torch.cuda.set_device(7)
+num_epoch = 5
 batch_size = 16
 learning_rate = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,11 +24,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 train_dataset = VOCDataset(root="./data", split="train")
 test_dataset = VOCDataset(root="./data", split="val")
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
 # 模型训练
-model = LightSegNet(num_classes=21).to(device)
+model = FCNs(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21).to(device)
 loss_func = nn.CrossEntropyLoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
@@ -47,7 +51,7 @@ def train(model, train_loader, loss_func, optimizer):
     
     return total_train_loss
 
-def test(model, test_loader):
+def test(model, test_loader, loss_func):
     model.eval()
     total_test_loss = 0
     num_batches = 0
@@ -67,30 +71,28 @@ def test(model, test_loader):
             
             total_test_loss += loss.item()
             num_batches += 1
-    
-    # 计算平均值
-    avg_metrics = {k: v / num_batches for k, v in total_metrics.items()}
-    return avg_metrics, total_test_loss
+
+    return total_test_loss
 
 def train_and_test(model, loss_func, optimizer):
-    
+    print("Start Training...")
     for epoch in range(1, num_epoch+1):
 
         start_time = time.time()
         total_train_loss = train(model, train_loader, loss_func, optimizer)
-        print(f"Epoch {epoch}/{num_epoch} \tTime: {time.time() - start_time} \tTrain Loss: {total_train_loss:.4f}")
+        print(f"Epoch {epoch}/{num_epoch} \tTime: {time.time() - start_time:.4f} \tTrain Loss: {total_train_loss:.4f}")
 
-    # visualize_results(model, train_loader)
+    # 保存模型
+    torch.save(model.state_dict(), "model/model.pth")
 
-    avg_metrics, total_test_loss = test(model, test_loader)
+
+    print("Start Testing...")
+    total_test_loss = test(model, test_loader, loss_func)
     # 打印所有指标
-    print(f"\n--------- Avg_Metrics----------:")
-    print(f"mIoU:               \t{avg_metrics['mIoU']:.4f}")
-    print(f"Dice:               \t{avg_metrics['Dice']:.4f}")
-    print(f"Hausdorff Distance: \t{avg_metrics['HD']:.4f}")
-    print(f"Accuracy:           \t{avg_metrics['Accuracy']:.4f}")
-    print(f"Recall:             \t{avg_metrics['Recall']:.4f}")
-    print(f"F1 Score:           \t{avg_metrics['F1']:.4f}")
+    print_avg_metrics(len(test_dataset))
+    
+    visualize_results(model, train_loader)
+
 
 def visualize_results(model, dataloader, num_samples=3):
     model.eval()
@@ -98,12 +100,9 @@ def visualize_results(model, dataloader, num_samples=3):
     images, masks = next(iter(dataloader))
     images = images.to(device)
     masks = masks.to(device)
-
-
     with torch.no_grad():
         preds = model(images).argmax(1)
     
-
     display(images.cpu(), preds.cpu(), masks.cpu(), num_samples)
 
 
