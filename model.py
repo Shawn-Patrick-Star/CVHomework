@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision.models import vgg16, VGG16_Weights, VGG  # 导入新版权重枚举
+from torchvision.models import VGG  # 导入新版权重枚举
 from torchvision import models
 
 """Architecture选择：FCN32s; FCN16s; FCN8s; FCNs"""
@@ -157,24 +157,14 @@ class VGGNet(VGG):
         self.ranges = ranges[model]
 
         if pretrained:
-            # 动态获取对应的权重类和模型构造函数
-            try:
-                # 获取权重类，如VGG16_Weights
-                model_weights_class = getattr(models, f"{model.upper()}_Weights")
-                # 使用IMAGENET1K_V1保持原行为，或用DEFAULT获取最新权重
-                weights = model_weights_class.IMAGENET1K_V1
-            except AttributeError:
-                raise ValueError(f"Unsupported model: {model}")
-            
-            # 获取模型构造函数并加载预训练权重
-            model_fn = getattr(models, model)
-            pretrained_model = model_fn(weights=weights)
-            self.load_state_dict(pretrained_model.state_dict())
+            exec("self.load_state_dict(models.%s(pretrained=True).state_dict())" % model)
 
         if not requires_grad:
             for param in super().parameters():
                 param.requires_grad = False
 
+        # delete redundant fully-connected layer params, can save memory
+        # 去掉vgg最后的全连接层(classifier)
         if remove_fc:  
             del self.classifier
 
@@ -184,11 +174,15 @@ class VGGNet(VGG):
 
     def forward(self, x):
         output = {}
+        # get the output of each maxpooling layer (5 maxpool in VGG net)
         for idx, (begin, end) in enumerate(self.ranges):
+        #self.ranges = ((0, 5), (5, 10), (10, 17), (17, 24), (24, 31)) (vgg16 examples)
             for layer in range(begin, end):
                 x = self.features[layer](x)
             output["x%d"%(idx+1)] = x
+
         return output
+
 
 ranges = {
     'vgg11': ((0, 3), (3, 6),  (6, 11),  (11, 16), (16, 21)),
