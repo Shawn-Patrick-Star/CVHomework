@@ -7,7 +7,7 @@ from utils import PIL2Tensor
 
 
 class VOCDataset(torch.utils.data.Dataset):
-    def __init__(self, root, split, crop_size=(320, 480)):
+    def __init__(self, root, split, crop_size=(224, 224)):
         self.root = root
         self.split = split
         self.crop_size = crop_size
@@ -89,4 +89,3 @@ if __name__ == "__main__":
     imgs, labels = next(iter(dataloader))
     display(imgs, labels, labels, num_samples=3)
      
-
