@@ -30,7 +30,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num
 model = FCNs(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21).to(device)
 loss_func = nn.NLLLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-
+# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
 def train(model, train_loader, loss_func, optimizer):
     model.train()     
@@ -92,8 +92,7 @@ def main():
     print(f"Test Loss: {total_test_loss:.4f}")
     print(epoch_avg_metrics)
 
-
-    visualize_results(model, train_loader)
+    visualize_results(model, train_loader, device)
 
 
 if __name__ == "__main__":

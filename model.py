@@ -220,8 +220,8 @@ def make_layers(cfg, batch_norm=False):
 if __name__ == "__main__":
     # 验证尺寸
     model = VGGNet(requires_grad=True, show_params=False)
-    model = FCNs(pretrained_net=model, n_class=21)
-    input = torch.randn(1, 3, 224, 224)
+    model = FCN8s(pretrained_net=model, n_class=21)
+    input = torch.randn(4, 3, 224, 224)
     output = model(input)
 
     print(output.size())

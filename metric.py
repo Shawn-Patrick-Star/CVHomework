@@ -66,8 +66,8 @@ def calculate_metrics(pred, target, num_classes=21):
     计算多个分割评估指标 mIoU, Dice, HD, Accuracy, Recall, F1
     
     Args:
-        pred: 预测结果 [B, H, W] 或 [B*H*W]
-        target: 真实标签 [B, H, W] 或 [B*H*W]
+        pred:   tensor(gpu) [B, H, W] 或 [B*H*W]
+        target: tensor(gpu) [B, H, W] 或 [B*H*W]
         num_classes: 类别数量
     
     Returns:

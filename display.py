@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
-from utils import denormalize, Tensor2PIL
-import numpy as np
-
+import warnings
+from utils import *
+warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
 
 def visualize_results(model, dataloader, device, num_samples=3):
     model.eval()
@@ -16,9 +16,9 @@ def visualize_results(model, dataloader, device, num_samples=3):
 
 
 '''
-    imgs: tensor, shape: [batch_size, 3, H, W]
-    preds: tensor, shape: [batch_size, H, W]
-    label: tensor, shape: [batch_size, H, W]
+    imgs: tensor(cpu), shape: [batch_size, 3, H, W]
+    preds: tensor(cpu), shape: [batch_size, H, W]
+    label: tensor(cpu), shape: [batch_size, H, W]
 '''
 def display(imgs, preds, labels, num_samples=3):
 
@@ -42,8 +42,8 @@ def display(imgs, preds, labels, num_samples=3):
         ax[i,2].set_title("Label")
 
     plt.tight_layout()
+    plt.savefig("pic/result.png")
     plt.show()
-    plt.savefig("result.png")
 
 
 
@@ -51,9 +51,10 @@ def display(imgs, preds, labels, num_samples=3):
 
 if __name__ == "__main__":
     import torch
-    from model import FCNs, VGGNet
     from torch.utils.data import DataLoader
+    from model import FCNs, VGGNet
     from dataSet import VOCDataset
+    from metric import *
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         preds = model(images).argmax(1)
 
-    from metric import *
+
     metrics = calculate_metrics(preds, labels, num_classes=21)
     print(metrics)
 
