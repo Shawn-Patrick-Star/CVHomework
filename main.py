@@ -13,7 +13,7 @@ from metric import calculate_metrics, print_avg_metrics
 # 如果在linux, 需要设置 device
 if os.name == 'posix':
     torch.cuda.set_device(7)
-num_epoch = 100
+num_epoch = 5
 batch_size = 16
 learning_rate = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,6 +52,8 @@ def train(model, train_loader, loss_func, optimizer):
     return total_train_loss
 
 def test(model, test_loader, loss_func):
+    
+
     model.eval()
     total_test_loss = 0
     num_batches = 0
@@ -66,9 +68,7 @@ def test(model, test_loader, loss_func):
             outputs = F.log_softmax(outputs, dim=1)
             loss = loss_func(outputs, labels)
 
-
-            for label, pred in zip(preds, labels): # 逐样本计算指标
-                calculate_metrics(pred, label)
+            batch_metric = calculate_metrics(preds, labels)
             
             total_test_loss += loss.item()
             num_batches += 1
@@ -99,7 +99,7 @@ def main():
         print(f"Epoch {epoch}/{num_epoch} \tTime: {time.time() - start_time:.4f} \tTrain Loss: {total_train_loss:.4f}")
 
     # 保存模型
-    torch.save(model.state_dict(), f"model_{num_epoch}.pth")
+    torch.save(model.state_dict(), f"model/model_{num_epoch}.pth")
 
     print("Start Testing...")
     total_test_loss = test(model, test_loader, loss_func)

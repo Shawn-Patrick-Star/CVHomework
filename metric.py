@@ -9,6 +9,47 @@ from scipy.spatial.distance import directed_hausdorff  # 用于计算HD
 from medpy.metric.binary import dc  # 用于计算Dice系数
 
 
+class Metrics:
+    """
+    计算多个分割评估指标 mIoU, Dice, HD, Accuracy, Recall, F1
+    """
+    def __init__(self, mIoU=0, Dice=0, HD=0, Accuracy=0, Recall=0, F1=0):
+        self.mIoU = mIoU
+        self.Dice = Dice
+        self.HD = HD
+        self.Accuracy = Accuracy
+        self.Recall = Recall
+        self.F1 = F1
+
+    def __add__(self, other):
+        return Metrics({
+            'mIoU': self.mIoU + other.mIoU,
+            'Dice': self.Dice + other.Dice,
+            'HD': self.HD + other.HD,
+            'Accuracy': self.Accuracy + other.Accuracy,
+            'Recall': self.Recall + other.Recall,
+            'F1': self.F1 + other.F1
+        })
+
+    def __truediv__(self, num):
+        return Metrics(
+            mIoU=self.mIoU / num,
+            Dice=self.Dice / num,
+            HD=self.HD / num,
+            Accuracy=self.Accuracy / num,
+            Recall=self.Recall / num,
+            F1=self.F1 / num
+        )
+    
+    def __str__(self):
+        return (f"mIoU:      \t{self.mIoU:.4f}\n"
+                f"Dice:      \t{self.Dice:.4f}\n"
+                f"HD:        \t{self.HD:.4f}\n"
+                f"Accuracy:  \t{self.Accuracy:.4f}\n"
+                f"Recall:    \t{self.Recall:.4f}\n"
+                f"F1:        \t{self.F1:.4f}")
+
+
 # 初始化所有指标的累加器
 total_metrics = {
     'mIoU':     0,      # mean Intersection over Union 平均交并比 
@@ -19,128 +60,199 @@ total_metrics = {
     'F1':       0       # F1 score 
 }
 
-def init_metrics():
-    global total_metrics
-    total_metrics = {k: 0 for k in total_metrics.keys()}
 
-def print_avg_metrics(num_batches):
-    avg_metrics = {k: v / num_batches for k, v in total_metrics.items()}
-
-    print(f"\n--------- Avg_Metrics----------:")
-    print_metrics(avg_metrics)
-
-def print_metrics(metrics):
-    print(f"mIoU:               \t{metrics['mIoU']:.4f}")
-    print(f"Dice:               \t{metrics['Dice']:.4f}")
-    print(f"Hausdorff Distance: \t{metrics['HD']:.4f}")
-    print(f"Accuracy:           \t{metrics['Accuracy']:.4f}")
-    print(f"Recall:             \t{metrics['Recall']:.4f}")
-    print(f"F1 Score:           \t{metrics['F1']:.4f}")
-    init_metrics()
-
-
-
-def calculate_metrics(label, pred, num_classes=21):
+def calculate_metrics(pred, target, num_classes=21):
     """
     计算多个分割评估指标 mIoU, Dice, HD, Accuracy, Recall, F1
+    
+    Args:
+        pred: 预测结果 [B, H, W] 或 [B*H*W]
+        target: 真实标签 [B, H, W] 或 [B*H*W]
+        num_classes: 类别数量
+    
+    Returns:
+        metrics: 包含各种评估指标的字典
     """
     
+    # 确保输入是正确的形状
+    if pred.dim() > 1:
+        pred = pred.view(-1)
+    if target.dim() > 1:
+        target = target.view(-1)
+    
     # 将输入转换为numpy数组
-    pred = pred.view(-1).cpu().numpy()
-    label = label.view(-1).cpu().numpy()
+    pred_np = pred.cpu().numpy()
+    target_np = target.cpu().numpy()
     
     # 计算mIoU
     def mIoU():
-        return jaccard_score(label, pred, average='macro', 
-                           labels=range(num_classes), 
+        # 只考虑实际出现在标签中的类别
+        present_classes = np.unique(target_np)
+        present_classes = present_classes[present_classes < num_classes]
+        
+        if len(present_classes) == 0:
+            return 0.0
+            
+        return jaccard_score(target_np, pred_np, average='macro', 
+                           labels=present_classes, 
                            zero_division=0)
     
     # 计算Dice系数
     def dice_score():
-        return f1_score(label, pred, average='macro',  # Dice系数等价于F1 score
-                       labels=range(num_classes),
+        # 只考虑实际出现在标签中的类别
+        present_classes = np.unique(target_np)
+        present_classes = present_classes[present_classes < num_classes]
+        
+        if len(present_classes) == 0:
+            return 0.0
+            
+        return f1_score(target_np, pred_np, average='macro',  # Dice系数等价于F1 score
+                       labels=present_classes,
                        zero_division=0)
     
     # 计算Hausdorff距离
     def hausdorff_distance():
+        # 获取原始形状信息
+        if hasattr(pred, 'shape') and len(pred.shape) > 1:
+            h, w = pred.shape[-2], pred.shape[-1]
+        else:
+            # 假设是正方形图像
+            h = w = int(np.sqrt(len(pred_np)))
+        
         scores = []
-        pred_2d = pred.reshape(224, 224)
-        label_2d = label.reshape(224, 224)
-        max_distance = np.sqrt(pred_2d.shape[0]**2 + pred_2d.shape[1]**2)
-    
-        for i in range(num_classes):
-            pred_mask = (pred == i)
-            label_mask = (label == i)
+        pred_2d = pred_np.reshape(h, w)
+        target_2d = target_np.reshape(h, w)
+        
+        # 只计算实际出现的类别
+        present_classes = np.unique(np.concatenate([np.unique(pred_2d), np.unique(target_2d)]))
+        present_classes = present_classes[present_classes < num_classes]
+        
+        for i in present_classes:
+            pred_mask = (pred_2d == i)
+            target_mask = (target_2d == i)
             
-            # 处理两个掩码均为空的情况
-            if not np.any(pred_mask) and not np.any(label_mask):
-                scores.append(0)
+            # 如果某个类别在预测或真实标签中不存在，跳过
+            if not np.any(pred_mask) or not np.any(target_mask):
                 continue
                 
-            # 仅一方为空，返回最大距离
-            if not np.any(pred_mask) or not np.any(label_mask):
-                scores.append(max_distance)
-                continue
+            try:
+                pred_points = np.array(np.where(pred_mask)).T
+                target_points = np.array(np.where(target_mask)).T
                 
-            # 提取坐标点
-            pred_points = np.stack(np.where(pred_mask), axis=1)
-            label_points = np.stack(np.where(label_mask), axis=1)
-            
-            # 计算双向Hausdorff距离
-            dh1 = directed_hausdorff(pred_points, label_points)[0]
-            dh2 = directed_hausdorff(label_points, pred_points)[0]
-            scores.append(max(dh1, dh2))
+                # 计算双向Hausdorff距离
+                forward_hd = directed_hausdorff(pred_points, target_points)[0]
+                backward_hd = directed_hausdorff(target_points, pred_points)[0]
+                scores.append(max(forward_hd, backward_hd))
+            except Exception as e:
+                print(f"Error calculating HD for class {i}: {e}")
+                continue
+        
+        # 如果没有计算任何距离，返回0
+        if len(scores) == 0:
+            return 0.0
             
         return np.mean(scores)
 
     # 计算Accuracy
     def accuracy():
-        return accuracy_score(label, pred)
+        return accuracy_score(target_np, pred_np)
 
     # 计算Recall
     def recall():
-        return recall_score(label, pred, average='macro',
-                          labels=range(num_classes),
+        # 只考虑实际出现在标签中的类别
+        present_classes = np.unique(target_np)
+        present_classes = present_classes[present_classes < num_classes]
+        
+        if len(present_classes) == 0:
+            return 0.0
+            
+        return recall_score(target_np, pred_np, average='macro',
+                          labels=present_classes,
                           zero_division=0)
 
     # 计算F1 score
     def f1():
-        return f1_score(label, pred, average='macro',
-                       labels=range(num_classes),
+        # 只考虑实际出现在标签中的类别
+        present_classes = np.unique(target_np)
+        present_classes = present_classes[present_classes < num_classes]
+        
+        if len(present_classes) == 0:
+            return 0.0
+            
+        return f1_score(target_np, pred_np, average='macro',
+                       labels=present_classes,
                        zero_division=0)
     
     # 计算所有指标
-    total_metrics['mIoU'] +=        mIoU()
-    total_metrics['Dice'] +=        dice_score()
-    # total_metrics['HD'] +=          hausdorff_distance()
-    total_metrics['Accuracy'] +=    accuracy()
-    total_metrics['Recall'] +=      recall()
-    total_metrics['F1'] +=          f1()
-    
+    try:
+        metrics = Metrics(
+            mIoU=mIoU(),
+            Dice=dice_score(),
+            # HD=hausdorff_distance(),
+            Accuracy=accuracy(),
+            Recall=recall(),
+            F1=f1()
+        )
+    except Exception as e:
+        print(f"Error calculating metrics: {e}")
+
+    return metrics
 
 if __name__ == "__main__":
     import torch
 
-    label = torch.zeros(224*224, dtype=torch.long)
-    pred = torch.zeros(224*224, dtype=torch.long)
-    calculate_metrics(label, pred, num_classes=2)
-    print("测试用例1 - 相同标签和预测:")
-    print_metrics(total_metrics)  # 预期所有指标为1 豪斯多夫距离为0
+    # 输入形状 [B=2, H=3, W=3]
+    pred = torch.tensor([
+        [[0,1,2], [2,1,0], [0,1,2]],
+        [[2,1,0], [0,1,2], [2,1,0]]
+    ], dtype=torch.long)
 
-    # 测试用例2: 标签全0，预测中最后一个像素为1
-    pred = torch.zeros(224*224, dtype=torch.long)
-    pred[-1] = 1  # 修改最后一个像素
-    calculate_metrics(label, pred, num_classes=2)
-    print("\n测试用例2 - 单个像素差异:")
-    print_metrics(total_metrics) 
+    target = pred.clone() # 完美匹配
+
+    metrics = calculate_metrics(pred, target, num_classes=3)
+    # 所有指标应达到理论最优值
+    assert metrics.mIoU == 1.0
+    assert metrics.Dice == 1.0
+    assert metrics.Accuracy == 1.0
+    assert metrics.Recall == 1.0
+    print("Test1 Passed!")
 
 
-    # 测试用例3: 不同区域的类别（例如类别1在上下半部分）
-    label = torch.zeros(224*224, dtype=torch.long)
-    label[:112*224] = 1  # 上半部分为1
-    pred = torch.zeros(224*224, dtype=torch.long)
-    pred[112*224:] = 1    # 下半部分为1
-    calculate_metrics(label, pred, num_classes=2)
-    print("\n测试用例3 - 不同区域分布:")
-    print_metrics(total_metrics)
 
+
+    # 非正方形的图像形状 [B=1, H=4, W=6]
+    pred = torch.randint(0, 3, (1,4,6))
+    target = pred.clone() # 强制预测正确
+
+    metrics = calculate_metrics(pred, target)
+    # 展平后与3D输入计算逻辑应一致
+    assert metrics.mIoU == 1.0
+    assert metrics.Dice == 1.0
+    assert metrics.Accuracy == 1.0
+    print("Test2 Passed!")
+
+
+
+
+
+    # 输入形状 [B=2, H=2, W=2]
+    pred = torch.tensor([
+        [[1,1], [1,1]],  # 全预测为1
+        [[0,0], [0,0]]   # 全预测为0
+    ], dtype=torch.long)
+
+    target = torch.tensor([
+        [[1,1], [0,0]],  # 第一个batch有2个错误
+        [[0,0], [0,0]]   # 第二个batch全对
+    ], dtype=torch.long)
+
+    metrics = calculate_metrics(pred, target, num_classes=2)
+    print(metrics)
+    print(metrics / 2)
+    # 全局计算指标：
+    # 第一个batch：TP=2, FP=2, FN=2 → IoU=2/(2+2+2)=0.333
+    # 第二个batch：TP=4, FP=0, FN=0 → IoU=1.0
+    # mIoU = (0.333 + 1.0)/2 = 0.666...
+    assert round(metrics.mIoU, 2) == 0.67
+    assert metrics.Accuracy == (2+4)/(4+4) == 0.75 # (正确像素数6/总像素数8)
+    print("Test3 Passed!")
