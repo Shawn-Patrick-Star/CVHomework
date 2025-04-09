@@ -22,14 +22,14 @@ class Metrics:
         self.F1 = F1
 
     def __add__(self, other):
-        return Metrics({
-            'mIoU': self.mIoU + other.mIoU,
-            'Dice': self.Dice + other.Dice,
-            'HD': self.HD + other.HD,
-            'Accuracy': self.Accuracy + other.Accuracy,
-            'Recall': self.Recall + other.Recall,
-            'F1': self.F1 + other.F1
-        })
+        return Metrics(
+            mIoU=self.mIoU + other.mIoU,
+            Dice=self.Dice + other.Dice,
+            HD=self.HD + other.HD,
+            Accuracy=self.Accuracy + other.Accuracy,
+            Recall=self.Recall + other.Recall,
+            F1=self.F1 + other.F1
+        )
 
     def __truediv__(self, num):
         return Metrics(
@@ -249,6 +249,7 @@ if __name__ == "__main__":
     metrics = calculate_metrics(pred, target, num_classes=2)
     print(metrics)
     print(metrics / 2)
+    print(metrics + metrics)
     # 全局计算指标：
     # 第一个batch：TP=2, FP=2, FN=2 → IoU=2/(2+2+2)=0.333
     # 第二个batch：TP=4, FP=0, FN=0 → IoU=1.0

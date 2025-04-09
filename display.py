@@ -3,7 +3,7 @@ from utils import denormalize, Tensor2PIL
 import numpy as np
 
 
-def visualize_results(model, dataloader, num_samples=3):
+def visualize_results(model, dataloader, device, num_samples=3):
     model.eval()
     # 这里应该补全可视化代码，并且输出<原图，预测图，真实标签图>
     images, masks = next(iter(dataloader))
@@ -56,26 +56,26 @@ if __name__ == "__main__":
     from dataSet import VOCDataset
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # 加载模型
-    model = FCNs(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21)
-    model.load_state_dict(torch.load("model.pth"))  # 加载参数
-    model.to(device)
-    
-    model.eval()
-    # 这里应该补全可视化代码，并且输出<原图，预测图，真实标签图>
+
     dataset = VOCDataset(root="./data", split="val")
     dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
-    images, masks = next(iter(dataloader))
+
+    # 加载模型
+    model = FCNs(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21)
+    model.load_state_dict(torch.load("model/model_5.pth"))  # 加载参数
+    model.to(device)
     
 
+    model.eval()
+    images, labels = next(iter(dataloader))
     images = images.to(device)
-    masks = masks.to(device)
+    labels = labels.to(device)
     with torch.no_grad():
         preds = model(images).argmax(1)
-    images, preds, masks = images.cpu(), preds.cpu(), masks.cpu()
 
-    print(np.unique(masks[0].numpy()))
-    print(np.unique(preds[0].numpy()))
+    from metric import *
+    metrics = calculate_metrics(preds, labels, num_classes=21)
+    print(metrics)
 
-    display(images, preds, masks, num_samples=3)
+    display(images.cpu(), preds.cpu(), labels.cpu(), num_samples=3)
 
