@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 from PIL import Image
 
 COLORMAP = {
@@ -60,3 +61,7 @@ def denormalize(tensor):
     tensor = torch.clamp(tensor, 0, 1)
     return tensor
 
+
+def mkdir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)

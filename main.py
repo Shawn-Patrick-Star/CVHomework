@@ -8,7 +8,10 @@ from dataSet import VOCDataset
 from model import VGGNet, FCNs
 from display import visualize_results
 from metric import *
+from utils import mkdir
 
+mkdir("model")
+mkdir("pic")
 
 # 如果在linux, 需要设置 device
 if os.name == 'posix':
