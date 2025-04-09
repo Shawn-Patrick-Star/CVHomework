@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import time
 import os
 from dataSet import VOCDataset
-from model import VGGNet, FCNs
+from model import VGGNet, FCN8s
 from display import visualize_results
 from metric import *
 from utils import mkdir
@@ -17,7 +17,7 @@ mkdir("pic")
 # 如果在linux, 需要设置 device
 if os.name == 'posix':
     torch.cuda.set_device(7)
-num_epoch = 1
+num_epoch = 10
 batch_size = 16
 learning_rate = 1e-3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -31,7 +31,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, nu
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
 # 模型训练
-model = FCNs(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21).to(device)
+model = FCN8s(pretrained_net=VGGNet(requires_grad=True, show_params=False), n_class=21).to(device)
 loss_func = nn.NLLLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
