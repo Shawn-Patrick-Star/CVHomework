@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import ndimage
 from sklearn.metrics import (
     jaccard_score,  # 用于计算IoU
     f1_score,       # 用于计算F1
@@ -75,14 +76,16 @@ def calculate_metrics(pred, target, num_classes=21):
     """
     
     # 确保输入是正确的形状
-    if pred.dim() > 1:
-        pred = pred.view(-1)
-    if target.dim() > 1:
-        target = target.view(-1)
+    if pred.dim() > 2:
+        batch_size, h, w = pred.shape
+    else:
+        # 如果输入是展平的，需要恢复原始形状
+        batch_size = 1
+        h = w = int(np.sqrt(len(pred)))
     
     # 将输入转换为numpy数组
-    pred_np = pred.cpu().numpy()
-    target_np = target.cpu().numpy()
+    pred_np = pred.cpu().numpy().reshape(batch_size, h, w)
+    target_np = target.cpu().numpy().reshape(batch_size, h, w)
     
     # 计算mIoU
     def mIoU():
@@ -93,7 +96,7 @@ def calculate_metrics(pred, target, num_classes=21):
         if len(present_classes) == 0:
             return 0.0
             
-        return jaccard_score(target_np, pred_np, average='macro', 
+        return jaccard_score(target_np.flatten(), pred_np.flatten(), average='macro', 
                            labels=present_classes, 
                            zero_division=0)
     
@@ -106,46 +109,47 @@ def calculate_metrics(pred, target, num_classes=21):
         if len(present_classes) == 0:
             return 0.0
             
-        return f1_score(target_np, pred_np, average='macro',  # Dice系数等价于F1 score
+        return f1_score(target_np.flatten(), pred_np.flatten(), average='macro',  # Dice系数等价于F1 score
                        labels=present_classes,
                        zero_division=0)
     
     # 计算Hausdorff距离
     def hausdorff_distance():
-        # 获取原始形状信息
-        if hasattr(pred, 'shape') and len(pred.shape) > 1:
-            h, w = pred.shape[-2], pred.shape[-1]
-        else:
-            # 假设是正方形图像
-            h = w = int(np.sqrt(len(pred_np)))
-        
         scores = []
-        pred_2d = pred_np.reshape(h, w)
-        target_2d = target_np.reshape(h, w)
         
-        # 只计算实际出现的类别
-        present_classes = np.unique(np.concatenate([np.unique(pred_2d), np.unique(target_2d)]))
-        present_classes = present_classes[present_classes < num_classes]
-        
-        for i in present_classes:
-            pred_mask = (pred_2d == i)
-            target_mask = (target_2d == i)
+        # 逐个处理批量中的每个图像
+        for i in range(batch_size):
+            pred_2d = pred_np[i]
+            target_2d = target_np[i]
             
-            # 如果某个类别在预测或真实标签中不存在，跳过
-            if not np.any(pred_mask) or not np.any(target_mask):
-                continue
+            # 只计算实际出现的类别
+            present_classes = np.unique(np.concatenate([np.unique(pred_2d), np.unique(target_2d)]))
+            present_classes = present_classes[present_classes < num_classes]
+            
+            for c in present_classes:
+                pred_mask = (pred_2d == c)
+                target_mask = (target_2d == c)
                 
-            try:
-                pred_points = np.array(np.where(pred_mask)).T
-                target_points = np.array(np.where(target_mask)).T
+                # 如果某个类别在预测或真实标签中不存在，跳过
+                if not np.any(pred_mask) or not np.any(target_mask):
+                    continue
                 
-                # 计算双向Hausdorff距离
-                forward_hd = directed_hausdorff(pred_points, target_points)[0]
-                backward_hd = directed_hausdorff(target_points, pred_points)[0]
-                scores.append(max(forward_hd, backward_hd))
-            except Exception as e:
-                print(f"Error calculating HD for class {i}: {e}")
-                continue
+                try:
+                    # 提取边界点
+                    pred_contours = np.array(np.where(pred_mask ^ ndimage.binary_erosion(pred_mask))).T
+                    target_contours = np.array(np.where(target_mask ^ ndimage.binary_erosion(target_mask))).T
+                    
+                    # 如果某个类别的边界为空，跳过
+                    if len(pred_contours) == 0 or len(target_contours) == 0:
+                        continue
+                    
+                    # 计算双向Hausdorff距离
+                    forward_hd = directed_hausdorff(pred_contours, target_contours)[0]
+                    backward_hd = directed_hausdorff(target_contours, pred_contours)[0]
+                    scores.append(max(forward_hd, backward_hd))
+                except Exception as e:
+                    print(f"Error calculating HD for class {c} in image {i}: {e}")
+                    continue
         
         # 如果没有计算任何距离，返回0
         if len(scores) == 0:
@@ -155,7 +159,7 @@ def calculate_metrics(pred, target, num_classes=21):
 
     # 计算Accuracy
     def accuracy():
-        return accuracy_score(target_np, pred_np)
+        return accuracy_score(target_np.flatten(), pred_np.flatten())
 
     # 计算Recall
     def recall():
@@ -166,7 +170,7 @@ def calculate_metrics(pred, target, num_classes=21):
         if len(present_classes) == 0:
             return 0.0
             
-        return recall_score(target_np, pred_np, average='macro',
+        return recall_score(target_np.flatten(), pred_np.flatten(), average='macro',
                           labels=present_classes,
                           zero_division=0)
 
@@ -179,7 +183,7 @@ def calculate_metrics(pred, target, num_classes=21):
         if len(present_classes) == 0:
             return 0.0
             
-        return f1_score(target_np, pred_np, average='macro',
+        return f1_score(target_np.flatten(), pred_np.flatten(), average='macro',
                        labels=present_classes,
                        zero_division=0)
     
@@ -188,7 +192,7 @@ def calculate_metrics(pred, target, num_classes=21):
         metrics = Metrics(
             mIoU=mIoU(),
             Dice=dice_score(),
-            # HD=hausdorff_distance(),
+            HD=hausdorff_distance(),
             Accuracy=accuracy(),
             Recall=recall(),
             F1=f1()
@@ -248,8 +252,6 @@ if __name__ == "__main__":
 
     metrics = calculate_metrics(pred, target, num_classes=2)
     print(metrics)
-    print(metrics / 2)
-    print(metrics + metrics)
     # 全局计算指标：
     # 第一个batch：TP=2, FP=2, FN=2 → IoU=2/(2+2+2)=0.333
     # 第二个batch：TP=4, FP=0, FN=0 → IoU=1.0
